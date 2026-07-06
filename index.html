@@ -1,137 +1,110 @@
-<!DOCTYPE html>
-<html lang="zh-CN">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>每周吃啥选择器</title>
-    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-</head>
-<body class="bg-gray-50 text-gray-800 p-6">
+<script>
+    // 1. 初始化 Supabase (请替换成你自己的项目 URL 和 Anon Key)
+    const SUPABASE_URL = 'https://syzkwpcepvmchjugoemd.supabase.co/rest/v1'; 
+    const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InN5emt3cGNlcHZtY2hqdWdvZW1kIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODMyODA3NzksImV4cCI6MjA5ODg1Njc3OX0.Hrdrf4V6FFOzwsbP_W_MDc3mfjP2k4BJuice2GL3Lqo'; 
+    
+    // 【核心修正】：使用 window.supabase 正确调用 CDN 引入的客户端，并重命名为 client 避免冲突
+    const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-    <div class="max-w-2xl mx-auto space-y-8">
-        <h1 class="text-3xl font-bold text-center text-indigo-600">🍴 这周吃点啥？</h1>
+    // 页面加载时自动拉取数据
+    window.onload = async () => {
+        fetchDishes();
+    };
 
-        <section class="bg-white p-6 rounded-xl shadow-sm">
-            <h2 class="text-xl font-bold mb-4">➕ 推荐新菜</h2>
-            <div class="flex gap-2">
-                <input id="dishName" type="text" placeholder="菜名" class="border p-2 rounded flex-1">
-                <input id="dishPrice" type="number" placeholder="价格" class="border p-2 rounded w-24">
-                <button onclick="submitDish()" class="bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700">提交</button>
-            </div>
-        </section>
-
-        <section class="bg-amber-50 p-6 rounded-xl shadow-sm border border-amber-200 text-center">
-            <h2 class="text-xl font-bold mb-2 text-amber-800">🎯 今天吃啥？</h2>
-            <p class="text-sm text-amber-600 mb-4">（从本周 Top 20 且未吃过的菜中随机）</p>
-            <div id="drawResult" class="text-2xl font-black text-amber-600 my-4">❓❓❓</div>
-            <button onclick="drawDish()" class="bg-amber-500 text-white px-6 py-3 rounded-full font-bold hover:bg-amber-600 shadow-md">碰碰运气</button>
-        </section>
-
-        <section class="grid grid-cols-2 gap-4">
-            <div>
-                <h3 class="font-bold text-lg mb-2">🔥 投票候选池</h3>
-                <ul id="candidateList" class="space-y-2"></ul>
-            </div>
-            <div>
-                <h3 class="font-bold text-lg mb-2">📋 本周菜单 (Top 20)</h3>
-                <ul id="weeklyList" class="space-y-2"></ul>
-            </div>
-        </section>
-    </div>
-
-    <script>
-        // 初始化 Supabase (替换成你自己的 URL 和 Anon Key)
-        const SUPABASE_URL = 'https://syzkwpcepvmchjugoemd.supabase.co/rest/v1';
-        const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InN5emt3cGNlcHZtY2hqdWdvZW1kIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODMyODA3NzksImV4cCI6MjA5ODg1Njc3OX0.Hrdrf4V6FFOzwsbP_W_MDc3mfjP2k4BJuice2GL3Lqo';
-        const supabase = @supabase/supabase-js.createClient(SUPABASE_URL, SUPABASE_KEY);
-
-        // 页面加载时初始化数据
-        window.onload = async () => {
-            fetchDishes();
-        };
-
-        // 1. 获取并渲染数据
-        async function fetchDishes() {
+    // 2. 获取并渲染数据
+    async function fetchDishes() {
+        try {
             // 获取候选池（未入选周榜的所有菜，按票数倒序）
-            const { data: candidates } = await supabase.from('dishes').select('*').eq('in_weekly_pool', false).order('votes', { ascending: false });
+            const { data: candidates, error: err1 } = await supabaseClient.from('dishes').select('*').eq('in_weekly_pool', false).order('votes', { ascending: false });
             // 获取周榜（已入选的菜）
-            const { data: weekly } = await supabase.from('dishes').select('*').eq('in_weekly_pool', true);
+            const { data: weekly, error: err2 } = await supabaseClient.from('dishes').select('*').eq('in_weekly_pool', true);
+
+            if (err1 || err2) {
+                console.error("读取数据库失败，请检查Supabase权限(RLS)是否关闭:", err1 || err2);
+                return;
+            }
 
             // 渲染候选池
             const candidateUl = document.getElementById('candidateList');
-            candidateUl.innerHTML = candidates.map(d => `
-                <li class="bg-white p-2 rounded shadow-sm flex justify-between items-center">
-                    <span>${d.name} (${d.price}元)</span>
-                    <button onclick="voteDish(${d.id})" class="text-sm bg-gray-100 px-2 py-1 rounded hover:bg-indigo-100">👍 ${d.votes}</button>
+            candidateUl.innerHTML = (candidates || []).map(d => `
+                <li class="bg-white p-2 rounded shadow-sm flex justify-between items-center border border-gray-100">
+                    <span>${d.name} <span class="text-gray-400 text-sm">(${d.price}元)</span></span>
+                    <button onclick="voteDish(${d.id})" class="text-sm bg-gray-100 px-3 py-1 rounded-full hover:bg-indigo-100 transition">👍 ${d.votes}</button>
                 </li>
             `).join('');
 
             // 渲染周榜（划掉已抽中的菜）
             const weeklyUl = document.getElementById('weeklyList');
-            weeklyUl.innerHTML = weekly.map(d => `
-                <li class="p-2 rounded flex justify-between ${d.is_drawn ? 'line-through text-gray-400 bg-gray-200' : 'bg-green-50 text-green-800 font-medium'}">
+            weeklyUl.innerHTML = (weekly || []).map(d => `
+                <li class="p-2 rounded flex justify-between transition ${d.is_drawn ? 'line-through text-gray-400 bg-gray-200' : 'bg-green-50 text-green-800 font-medium'}">
                     <span>${d.name}</span>
-                    <span>${d.is_drawn ? '👉 已吃' : '⏳ 待抽'}</span>
+                    <span class="text-sm">${d.is_drawn ? '👉 已吃' : '⏳ 待抽'}</span>
                 </li>
             `).join('');
+        } catch (e) {
+            console.error("渲染失败:", e);
+        }
+    }
+
+    // 3. 提交新菜品
+    async function submitDish() {
+        const name = document.getElementById('dishName').value.trim();
+        const price = document.getElementById('dishPrice').value || 0;
+        if(!name) return alert('菜名不能为空！');
+
+        const { error } = await supabaseClient.from('dishes').insert([{ name, price }]);
+        if(error) return alert('提交失败: ' + error.message);
+        
+        document.getElementById('dishName').value = '';
+        document.getElementById('dishPrice').value = '';
+        fetchDishes();
+    }
+
+    // 4. 投票（前端防刷票逻辑）
+    async function voteDish(id) {
+        let voted = JSON.parse(localStorage.getItem('voted_dishes') || '[]');
+        if(voted.includes(id)) return alert('这道菜你已经投过票啦！');
+
+        // 先查出当前票数
+        const { data, error } = await supabaseClient.from('dishes').select('votes').eq('id', id).single();
+        if(error) return alert('投票失败: ' + error.message);
+
+        // 票数 +1
+        await supabaseClient.from('dishes').update({ votes: data.votes + 1 }).eq('id', id);
+
+        voted.push(id);
+        localStorage.setItem('voted_dishes', JSON.stringify(voted));
+        fetchDishes();
+    }
+
+    // 5. 随机抽取
+    async function drawDish() {
+        // 捞出本周菜单里 且 未被抽过 的菜
+        const { data: pool } = await supabaseClient.from('dishes').select('*').eq('in_weekly_pool', true).eq('is_drawn', false);
+        
+        if(!pool || pool.length === 0) {
+            return alert('本周候选菜单里没有可以抽的菜了！（请确保已有菜品入选了本周菜单且未被抽完）');
         }
 
-        // 2. 提交新菜品
-        async function submitDish() {
-            const name = document.getElementById('dishName').value;
-            const price = document.getElementById('dishPrice').value || 0;
-            if(!name) return alert('菜名不能为空');
-
-            await supabase.from('dishes').insert([{ name, price }]);
-            document.getElementById('dishName').value = '';
-            fetchDishes();
-        }
-
-        // 3. 投票（前端防刷票逻辑）
-        async function voteDish(id) {
-            let voted = JSON.parse(localStorage.getItem('voted_dishes') || '[]');
-            if(voted.includes(id)) return alert('这道菜你已经投过票啦！');
-
-            // 票数 +1 (利用 RPC 或直接更新，为简单演示直接先查后改，高并发可用 supabase rpc)
-            const { data } = await supabase.from('dishes').select('votes').eq('id', id).single();
-            await supabase.from('dishes').update({ votes: data.votes + 1 }).eq('id', id);
-
-            voted.push(id);
-            localStorage.setItem('voted_dishes', JSON.stringify(voted));
-            fetchDishes();
-        }
-
-        // 4. 随机抽取
-        async function drawDish() {
-            // 捞出本周菜单里 且 未被抽过 的菜
-            const { data: pool } = await supabase.from('dishes').select('*').eq('in_weekly_pool', true).eq('is_drawn', false);
-            
-            if(!pool || pool.length === 0) {
-                return alert('本周菜单已经全部吃完啦！或者还没生成本周菜单。');
+        const resultDiv = document.getElementById('drawResult');
+        let counter = 0;
+        // 跑马灯随机动画效果
+        const interval = setInterval(() => {
+            resultDiv.innerText = pool[Math.floor(Math.random() * pool.length)].name;
+            if(counter++ > 10) {
+                clearInterval(interval);
+                finalizeDraw(pool);
             }
+        }, 100);
+    }
 
-            // 前端伪随机动画效果
-            const resultDiv = document.getElementById('drawResult');
-            let counter = 0;
-            const interval = setInterval(() => {
-                resultDiv.innerText = pool[Math.floor(Math.random() * pool.length)].name;
-                if(counter++ > 10) {
-                    clearInterval(interval);
-                    finalizeDraw(pool);
-                }
-            }, 100);
-        }
-
-        // 确认抽中，写入数据库
-        async function finalizeDraw(pool) {
-            const finalDish = pool[Math.floor(Math.random() * pool.length)];
-            document.getElementById('drawResult').innerText = `🎉 今天吃：${finalDish.name}！`;
-            
-            // 标记数据库为已抽中
-            await supabase.from('dishes').update({ is_drawn: true }).eq('id', finalDish.id);
-            fetchDishes(); // 刷新界面
-        }
-    </script>
-</body>
-</html>
+    // 6. 确认抽中，写入数据库
+    async function finalizeDraw(pool) {
+        const finalDish = pool[Math.floor(Math.random() * pool.length)];
+        document.getElementById('drawResult').innerText = `🎉 今天吃：${finalDish.name}！`;
+        
+        // 标记数据库为已抽中
+        await supabaseClient.from('dishes').update({ is_drawn: true }).eq('id', finalDish.id);
+        fetchDishes(); 
+    }
+</script>
